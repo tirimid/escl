@@ -43,26 +43,26 @@ main(int argc, char const *argv[])
 			return 0;
 		} else if (!strcmp(argv[i], "ua")) {
 			if (conf_add("user", argv[++i])) {
-				printf("failed to add user: %s\n", argv[i]);
+				fprintf(stderr, "failed to add user: %s\n", argv[i]);
 				return 1;
 			}
 		} else if (!strcmp(argv[i], "ur")) {
 			if (conf_rm("user", argv[++i])) {
-				printf("failed to remove user: %s\n", argv[i]);
+				fprintf(stderr, "failed to remove user: %s\n", argv[i]);
 				return 1;
 			}
 		} else if (!strcmp(argv[i], "pa")) {
 			if (conf_add("passwd", crypt(argv[++i], SALT))) {
-				printf("failed to add password: %s\n", argv[i]);
+				fprintf(stderr, "failed to add password: %s\n", argv[i]);
 				return 1;
 			}
 		} else if (!strcmp(argv[i], "pr")) {
 			if (conf_rm("passwd", crypt(argv[++i], SALT))) {
-				printf("failed to remove password: %s\n", argv[i]);
+				fprintf(stderr, "failed to remove password: %s\n", argv[i]);
 				return 1;
 			}
 		} else {
-			printf("unsupported option: %s\n", argv[i]);
+			fprintf(stderr, "unsupported option: %s\n", argv[i]);
 			return 1;
 		}
 	}
@@ -71,24 +71,28 @@ main(int argc, char const *argv[])
 		return 0;
 
 	if (conf_find("user", getlogin()) == -1) {
-		printf("user is not authorized to use escl: %s\n", getlogin());
+		fprintf(stderr, "user is not authorized to use escl: %s\n", getlogin());
 		return 1;
 	}
 
-	passwd = getpasswd("password: ");
+	if (!(passwd = getpasswd("password: "))) {
+		fputs("failed to get password\n", stderr);
+		return 1;
+	}
+	
 	hash = crypt(passwd, SALT);
 	free(passwd);
 
 	if (conf_find("passwd", hash) == -1) {
-		printf("authentication failed\n");
+		fputs("authentication failed\n", stderr);
 		return 1;
 	}
 
 	if (setuid(0)) {
-		printf("cannot become root\n");
+		fputs("failed to become root\n", stderr);
 		return 1;
 	}
-
+	
 	return execvp(argv[i], (char *const *)argv + i);
 }
 
@@ -98,22 +102,33 @@ getpasswd(char const *prompt)
 	struct termios old, new;
 	char *lptr = NULL;
 	size_t n;
-
-	printf("%s", prompt);
-
-	if (tcgetattr(fileno(stdout), &old))
+	FILE *ttyfp;
+	
+	if (!(ttyfp = fopen(ctermid(NULL), "w+")))
 		return NULL;
+
+	fputs(prompt, ttyfp);
+	fflush(ttyfp);
+
+	if (tcgetattr(fileno(ttyfp), &old) == -1) {
+		fclose(ttyfp);
+		return NULL;
+	}
 	
 	new = old;
 	new.c_lflag &= ~ECHO;
-	
-	if (tcsetattr(fileno (stdout), TCSAFLUSH, &new))
+
+	if (tcsetattr(fileno(ttyfp), TCSAFLUSH, &new) == -1) {
+		fclose(ttyfp);
 		return NULL;
+	}
+
+	getline(&lptr, &n, ttyfp);
 	
-	getline(&lptr, &n, stdin);
+	tcsetattr(fileno(ttyfp), TCSAFLUSH, &old);
+	putc('\n', ttyfp);
 	
-	tcsetattr(fileno(stdout), TCSAFLUSH, &old);
-	putc('\n', stdout);
+	fclose(ttyfp);
 
 	return lptr;
 }
