@@ -26,7 +26,7 @@ Immediately following installation:
 `escl -pa <pass1> -pa <pass2> ...`
 
 When usage is actually needed:
-1. Run the command you with to execute, prefixed by `escl`. For example, a
+1. Run the command you wish to execute, prefixed by `escl`. For example, a
 non-root user may run `escl pacman -Syu` in a similar way to how they would run
 `sudo pacman -Syu`
 2. Enter one of the added passwords
