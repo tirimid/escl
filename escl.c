@@ -4,6 +4,7 @@
 
 #include <crypt.h>
 #include <fcntl.h>
+#include <strings.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -81,6 +82,7 @@ main(int argc, char const *argv[])
 	}
 	
 	hash = crypt(passwd, SALT);
+	explicit_bzero(passwd, strlen(passwd));
 	free(passwd);
 
 	if (conf_find("passwd", hash) == -1) {
