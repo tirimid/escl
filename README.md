@@ -1,7 +1,7 @@
 # escl
 
 ## Introduction
-escl is a program for elavating privileges to root. As a regular Linux desktop
+escl is a program for elevating privileges to root. As a regular Linux desktop
 user and programmer, I have very little use for the intricate bloat of sudo,
 and while doas is better, I felt it could still be more minimal. This program
 only implements two things:
