@@ -1,6 +1,6 @@
 INSTDIR := /usr/bin
 CC := gcc
-CFLAGS := -std=c89 -pedantic -D_POSIX_C_SOURCE=200809
+CFLAGS := -std=c99 -pedantic -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809
 LIBS := -lcrypt
 
 all: escl
