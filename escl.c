@@ -4,7 +4,9 @@
 
 #include <crypt.h>
 #include <fcntl.h>
+#include <pwd.h>
 #include <strings.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -21,6 +23,7 @@ main(int argc, char const *argv[])
 {
 	int i, icp;
 	char *passwd, *hash;
+	char const *user = getpwuid(getuid())->pw_name;
 	
 	if (argc <= 1) {
 		printf("usage: %s [options] command [...]\n", argv[0]);
@@ -71,8 +74,8 @@ main(int argc, char const *argv[])
 	if (i == argc)
 		return 0;
 
-	if (conf_find("user", getlogin()) == -1) {
-		fprintf(stderr, "user is not authorized to use escl: %s\n", getlogin());
+	if (conf_find("user", user) == -1) {
+		fprintf(stderr, "user is not authorized to use escl: %s\n", user);
 		return 1;
 	}
 
