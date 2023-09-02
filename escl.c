@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,8 +12,9 @@
 #include <unistd.h>
 
 #define CONF_FILE "/etc/escl.conf"
-#define SALT "pw"
 
+static char const *hashpasswd(char const *passwd);
+static int execargs(int argc, char const *argv[]);
 static char *getpasswd(char const *prompt);
 static int conf_add(char const *label, char const *data);
 static int conf_rm(char const *label, char const *data);
@@ -26,6 +28,68 @@ main(int argc, char const *argv[])
 		return 0;
 	}
 
+	int firstarg = execargs(argc, argv);
+	if (firstarg == argc)
+		return 0;
+
+	char const *user = getpwuid(getuid())->pw_name;
+	if (conf_find("user", user) == -1) {
+		fprintf(stderr, "user is not authorized to use escl: %s\n", user);
+		return 1;
+	}
+
+	char *passwd = getpasswd("password: ");
+	if (!passwd) {
+		fputs("failed to get password\n", stderr);
+		return 1;
+	}
+	
+	char const *hash = hashpasswd(passwd);
+	explicit_bzero(passwd, strlen(passwd) * sizeof(char));
+	free(passwd);
+
+	if (conf_find("passwd", hash) == -1) {
+		fputs("authentication failed\n", stderr);
+		return 1;
+	}
+
+	if (setuid(0)) {
+		fputs("failed to become root\n", stderr);
+		return 1;
+	}
+	
+	return execvp(argv[firstarg], (char *const *)argv + firstarg);
+}
+
+static char const *
+hashpasswd(char const *passwd)
+{
+	char hname[HOST_NAME_MAX + 1];
+	gethostname(hname, HOST_NAME_MAX);
+
+	// repeatedly use hostname to determine salt.
+	// individual user-related details cannot be used, as the passwords must
+	// apply globally to any user who wishes to use them - thus, the "global"
+	// scale is used: the machine which the users are on.
+	// this is still perfectly workable for the intended use case.
+	char *iterh = strdup(crypt(passwd, "pw"));
+	
+	for (size_t i = 0, slen = strlen(hname); i < slen; i += 2) {
+		char salt[3] = {hname[i], hname[i + 1] ? hname[i + 1] : 'w', 0};
+		char *tmph = iterh;
+		iterh = strdup(crypt(tmph, salt));
+		free(tmph);
+	}
+
+	char const *reth = crypt(iterh, "pw");
+	free(iterh);
+	
+	return reth;
+}
+
+static int
+execargs(int argc, char const *argv[])
+{
 	int i;
 	
 	for (i = 1; i < argc; ++i) {
@@ -41,64 +105,35 @@ main(int argc, char const *argv[])
 			puts("\t-ur (user)  remove a user's ability to use escl");
 			puts("\t-pa (pass)  add an escl password");
 			puts("\t-pr (pass)  remove an escl password");
-			
-			return 0;
+
+			exit(0);
 		} else if (!strcmp(argv[i], "ua")) {
 			if (conf_add("user", argv[++i])) {
 				fprintf(stderr, "failed to add user: %s\n", argv[i]);
-				return 1;
+				exit(1);
 			}
 		} else if (!strcmp(argv[i], "ur")) {
 			if (conf_rm("user", argv[++i])) {
 				fprintf(stderr, "failed to remove user: %s\n", argv[i]);
-				return 1;
+				exit(1);
 			}
 		} else if (!strcmp(argv[i], "pa")) {
-			if (conf_add("passwd", crypt(argv[++i], SALT))) {
+			if (conf_add("passwd", hashpasswd(argv[++i]))) {
 				fprintf(stderr, "failed to add password: %s\n", argv[i]);
-				return 1;
+				exit(1);
 			}
 		} else if (!strcmp(argv[i], "pr")) {
-			if (conf_rm("passwd", crypt(argv[++i], SALT))) {
+			if (conf_rm("passwd", hashpasswd(argv[++i]))) {
 				fprintf(stderr, "failed to remove password: %s\n", argv[i]);
-				return 1;
+				exit(1);
 			}
 		} else {
 			fprintf(stderr, "unsupported option: %s\n", argv[i]);
-			return 1;
+			exit(1);
 		}
 	}
 
-	if (i == argc)
-		return 0;
-
-	char const *user = getpwuid(getuid())->pw_name;
-	if (conf_find("user", user) == -1) {
-		fprintf(stderr, "user is not authorized to use escl: %s\n", user);
-		return 1;
-	}
-
-	char *passwd = getpasswd("password: ");
-	if (!passwd) {
-		fputs("failed to get password\n", stderr);
-		return 1;
-	}
-	
-	char const *hash = crypt(passwd, SALT);
-	explicit_bzero(passwd, strlen(passwd) * sizeof(char));
-	free(passwd);
-
-	if (conf_find("passwd", hash) == -1) {
-		fputs("authentication failed\n", stderr);
-		return 1;
-	}
-
-	if (setuid(0)) {
-		fputs("failed to become root\n", stderr);
-		return 1;
-	}
-	
-	return execvp(argv[i], (char *const *)argv + i);
+	return i;
 }
 
 static char *
@@ -128,6 +163,7 @@ getpasswd(char const *prompt)
 	char *lptr = NULL;
 	size_t n;
 	getline(&lptr, &n, ttyfp);
+	lptr[strlen(lptr) - 1] = 0;
 	
 	tcsetattr(fileno(ttyfp), TCSAFLUSH, &old);
 	putc('\n', ttyfp);
