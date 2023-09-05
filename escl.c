@@ -63,7 +63,10 @@ main(int argc, char const *argv[])
 		return 1;
 	}
 	
-	return execvp(argv[firstarg], (char *const *)argv + firstarg);
+	if (execvp(argv[firstarg], (char *const *)argv + firstarg) == -1) {
+		perror("failed to execute command");
+		return 1;
+	}
 }
 
 static int
