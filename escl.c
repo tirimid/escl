@@ -81,6 +81,8 @@ execargs(int argc, char const *argv[])
 		++argv[i];
 
 		if (!strcmp(argv[i], "h")) {
+			puts("usage:");
+			printf("\t%s [options] ...\n", argv[0]);
 			puts("options:");
 			puts("\t-h          display this menu");
 			puts("\t-ua (user)  give a user the ability to use escl");
